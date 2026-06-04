@@ -6,3 +6,5 @@ __pycache__/
 db_config.py
 frontend/
 docs/
+.env
+migrate_step1.py
