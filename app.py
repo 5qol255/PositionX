@@ -72,6 +72,8 @@ class PositionCreate(BaseModel):
     responsibilities: str = Field(..., min_length=1, description="岗位职责")
     requirements: str = Field(..., min_length=1, description="岗位要求")
     bonus: str = Field(default="", description="加分项")
+    status: Optional[str] = Field(None, description="岗位状态（默认 DRAFT）")
+
 
 class PositionUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200, description="岗位名称")
@@ -79,12 +81,11 @@ class PositionUpdate(BaseModel):
     requirements: Optional[str] = Field(None, min_length=1, description="岗位要求")
     bonus: Optional[str] = Field(None, description="加分项")
 
-class PositionResponse(BaseModel):
-    id: int
-    title: str
-    responsibilities: str
-    requirements: str
-    bonus: str
+
+class StatusUpdateRequest(BaseModel):
+    action: str = Field(..., description="操作：submit/approve/reject/close")
+    comment: str = Field(default="", description="审批意见（可选）")
+
 
 class BatchUploadRequest(BaseModel):
     positions: List[PositionCreate]
@@ -158,15 +159,58 @@ def get_me(current_user: dict = Depends(get_current_user)):
 
 # ---------- 岗位 API ----------
 
+POSITION_COLUMNS = "id, title, responsibilities, requirements, bonus, status, created_at, updated_at"
+
+# 状态流转规则：(当前状态, action) -> 目标状态
+STATUS_TRANSITIONS = {
+    ("DRAFT", "submit"): "PENDING",
+    ("PENDING", "approve"): "PUBLISHED",
+    ("PENDING", "reject"): "DRAFT",
+    ("PUBLISHED", "close"): "CLOSED",
+}
+
+# 各状态允许的操作
+ALLOWED_ACTIONS = {
+    "DRAFT": ["submit"],
+    "PENDING": ["approve", "reject"],
+    "PUBLISHED": ["close"],
+}
+
+
 @app.get("/webapi/positions", response_model=dict)
-def get_all_positions():
-    """获取所有岗位信息"""
+def get_all_positions(
+    keyword: Optional[str] = None,
+    status: Optional[str] = None,
+):
+    """获取岗位列表（支持搜索/过滤）"""
     conn = get_connection()
     try:
+        conditions = []
+        params = []
+        if keyword:
+            conditions.append("title LIKE %s")
+            params.append(f"%{keyword}%")
+        if status:
+            conditions.append("status = %s")
+            params.append(status)
+
+        where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+
         with conn.cursor() as cursor:
-            cursor.execute("SELECT id, title, responsibilities, requirements, bonus FROM positions ORDER BY id DESC")
+            cursor.execute(
+                f"SELECT {POSITION_COLUMNS} FROM positions{where} ORDER BY id DESC",
+                params,
+            )
             rows = cursor.fetchall()
-        return {"data": rows}
+
+        # 将 datetime 转为字符串
+        for row in rows:
+            if row.get("created_at"):
+                row["created_at"] = str(row["created_at"])
+            if row.get("updated_at"):
+                row["updated_at"] = str(row["updated_at"])
+
+        return {"code": 200, "message": "success", "data": rows}
     finally:
         conn.close()
 
@@ -178,36 +222,48 @@ def get_position(position_id: int):
     try:
         with conn.cursor() as cursor:
             cursor.execute(
-                "SELECT id, title, responsibilities, requirements, bonus FROM positions WHERE id = %s",
-                (position_id,)
+                f"SELECT {POSITION_COLUMNS} FROM positions WHERE id = %s",
+                (position_id,),
             )
             row = cursor.fetchone()
             if not row:
                 raise HTTPException(status_code=404, detail="岗位不存在")
-        return {"data": row}
+
+        if row.get("created_at"):
+            row["created_at"] = str(row["created_at"])
+        if row.get("updated_at"):
+            row["updated_at"] = str(row["updated_at"])
+
+        return {"code": 200, "message": "success", "data": row}
     finally:
         conn.close()
 
 
 @app.post("/webapi/positions", status_code=201, response_model=dict)
-def create_position(position: PositionCreate):
-    """新增岗位"""
+def create_position(
+    position: PositionCreate,
+    current_user: dict = Depends(require_role("admin")),
+):
+    """新增岗位（仅 admin）"""
     conn = get_connection()
     try:
+        status = position.status or "DRAFT"
         with conn.cursor() as cursor:
-            sql = "INSERT INTO positions (title, responsibilities, requirements, bonus) VALUES (%s, %s, %s, %s)"
-            cursor.execute(sql, (position.title, position.responsibilities, position.requirements, position.bonus))
+            sql = "INSERT INTO positions (title, responsibilities, requirements, bonus, status) VALUES (%s, %s, %s, %s, %s)"
+            cursor.execute(sql, (position.title, position.responsibilities, position.requirements, position.bonus, status))
             conn.commit()
             new_id = cursor.lastrowid
 
-        # 查询新建的完整记录
         with conn.cursor() as cursor:
-            cursor.execute(
-                "SELECT id, title, responsibilities, requirements, bonus FROM positions WHERE id = %s",
-                (new_id,)
-            )
+            cursor.execute(f"SELECT {POSITION_COLUMNS} FROM positions WHERE id = %s", (new_id,))
             new_row = cursor.fetchone()
-        return {"data": new_row}
+
+        if new_row.get("created_at"):
+            new_row["created_at"] = str(new_row["created_at"])
+        if new_row.get("updated_at"):
+            new_row["updated_at"] = str(new_row["updated_at"])
+
+        return {"code": 201, "message": "创建成功", "data": new_row}
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=500, detail=f"新增失败: {str(e)}")
@@ -216,20 +272,25 @@ def create_position(position: PositionCreate):
 
 
 @app.put("/webapi/positions/{position_id}", response_model=dict)
-def update_position(position_id: int, position: PositionUpdate):
-    """更新岗位信息（支持部分更新）"""
-    # 检查岗位是否存在
+def update_position(
+    position_id: int,
+    position: PositionUpdate,
+    current_user: dict = Depends(require_role("admin")),
+):
+    """更新岗位信息（仅 admin，且仅 DRAFT 状态可编辑）"""
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
             cursor.execute(
-                "SELECT id FROM positions WHERE id = %s",
-                (position_id,)
+                f"SELECT {POSITION_COLUMNS} FROM positions WHERE id = %s",
+                (position_id,),
             )
-            if not cursor.fetchone():
+            existing = cursor.fetchone()
+            if not existing:
                 raise HTTPException(status_code=404, detail="岗位不存在")
+            if existing["status"] != "DRAFT":
+                raise HTTPException(status_code=400, detail="只有草稿状态的岗位可以编辑")
 
-        # 构建动态更新 SQL
         updates = []
         params = []
         if position.title is not None:
@@ -246,14 +307,7 @@ def update_position(position_id: int, position: PositionUpdate):
             params.append(position.bonus)
 
         if not updates:
-            # 无字段需要更新，直接返回当前记录
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    "SELECT id, title, description FROM positions WHERE id = %s",
-                    (position_id,)
-                )
-                row = cursor.fetchone()
-            return {"data": row}
+            return {"code": 200, "message": "无需更新", "data": existing}
 
         sql = f"UPDATE positions SET {', '.join(updates)} WHERE id = %s"
         params.append(position_id)
@@ -262,14 +316,16 @@ def update_position(position_id: int, position: PositionUpdate):
             cursor.execute(sql, params)
             conn.commit()
 
-        # 返回更新后的记录
         with conn.cursor() as cursor:
-            cursor.execute(
-                "SELECT id, title, responsibilities, requirements, bonus FROM positions WHERE id = %s",
-                (position_id,)
-            )
+            cursor.execute(f"SELECT {POSITION_COLUMNS} FROM positions WHERE id = %s", (position_id,))
             updated_row = cursor.fetchone()
-        return {"data": updated_row}
+
+        if updated_row.get("created_at"):
+            updated_row["created_at"] = str(updated_row["created_at"])
+        if updated_row.get("updated_at"):
+            updated_row["updated_at"] = str(updated_row["updated_at"])
+
+        return {"code": 200, "message": "更新成功", "data": updated_row}
     except HTTPException:
         raise
     except Exception as e:
@@ -280,24 +336,28 @@ def update_position(position_id: int, position: PositionUpdate):
 
 
 @app.delete("/webapi/positions/{position_id}", response_model=dict)
-def delete_position(position_id: int):
-    """删除岗位"""
+def delete_position(
+    position_id: int,
+    current_user: dict = Depends(require_role("admin")),
+):
+    """删除岗位（仅 admin，且仅 DRAFT/CLOSED 状态可删除）"""
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
             cursor.execute(
-                "SELECT id FROM positions WHERE id = %s",
-                (position_id,)
+                "SELECT id, status FROM positions WHERE id = %s",
+                (position_id,),
             )
-            if not cursor.fetchone():
+            existing = cursor.fetchone()
+            if not existing:
                 raise HTTPException(status_code=404, detail="岗位不存在")
+            if existing["status"] not in ("DRAFT", "CLOSED"):
+                raise HTTPException(status_code=400, detail="只有草稿或已关闭的岗位可以删除")
 
-            cursor.execute(
-                "DELETE FROM positions WHERE id = %s",
-                (position_id,)
-            )
+            cursor.execute("DELETE FROM positions WHERE id = %s", (position_id,))
             conn.commit()
-        return {"message": f"岗位 id={position_id} 删除成功"}
+
+        return {"code": 200, "message": f"岗位 id={position_id} 删除成功", "data": None}
     except HTTPException:
         raise
     except Exception as e:
@@ -307,9 +367,92 @@ def delete_position(position_id: int):
         conn.close()
 
 
+@app.patch("/webapi/positions/{position_id}/status", response_model=dict)
+def update_position_status(
+    position_id: int,
+    body: StatusUpdateRequest,
+    current_user: dict = Depends(require_role("admin", "approver")),
+):
+    """变更岗位状态（admin/approver 可操作）"""
+    action = body.action
+    if action not in STATUS_TRANSITIONS.values() and action not in ("submit", "approve", "reject", "close"):
+        raise HTTPException(status_code=400, detail=f"无效操作: {action}")
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                f"SELECT {POSITION_COLUMNS} FROM positions WHERE id = %s",
+                (position_id,),
+            )
+            existing = cursor.fetchone()
+            if not existing:
+                raise HTTPException(status_code=404, detail="岗位不存在")
+
+        current_status = existing["status"]
+        allowed = ALLOWED_ACTIONS.get(current_status, [])
+        if action not in allowed:
+            raise HTTPException(
+                status_code=400,
+                detail=f"当前状态 {current_status} 不允许执行 {action} 操作",
+            )
+
+        new_status = STATUS_TRANSITIONS[(current_status, action)]
+
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "UPDATE positions SET status = %s WHERE id = %s",
+                (new_status, position_id),
+            )
+            conn.commit()
+
+        with conn.cursor() as cursor:
+            cursor.execute(f"SELECT {POSITION_COLUMNS} FROM positions WHERE id = %s", (position_id,))
+            updated_row = cursor.fetchone()
+
+        if updated_row.get("created_at"):
+            updated_row["created_at"] = str(updated_row["created_at"])
+        if updated_row.get("updated_at"):
+            updated_row["updated_at"] = str(updated_row["updated_at"])
+
+        return {"code": 200, "message": f"状态已变更为 {new_status}", "data": updated_row}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"状态变更失败: {str(e)}")
+    finally:
+        conn.close()
+
+
+@app.get("/webapi/statistics", response_model=dict)
+def get_statistics():
+    """统计数据（按状态分组）"""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) as total FROM positions")
+            total = cursor.fetchone()["total"]
+
+            cursor.execute("SELECT status, COUNT(*) as cnt FROM positions GROUP BY status")
+            rows = cursor.fetchall()
+            by_status = {row["status"]: row["cnt"] for row in rows}
+
+        return {
+            "code": 200,
+            "message": "success",
+            "data": {"total": total, "by_status": by_status},
+        }
+    finally:
+        conn.close()
+
+
 @app.post("/webapi/positions/batch", status_code=201, response_model=dict)
-def batch_upload(request: BatchUploadRequest):
-    """批量上传岗位（自动跳过已存在的重复记录）"""
+def batch_upload(
+    request: BatchUploadRequest,
+    current_user: dict = Depends(require_role("admin")),
+):
+    """批量上传岗位（仅 admin，默认 DRAFT 状态）"""
     if not request.positions:
         raise HTTPException(status_code=400, detail="导入数据不能为空")
 
@@ -319,26 +462,25 @@ def batch_upload(request: BatchUploadRequest):
         skipped = 0
         with conn.cursor() as cursor:
             for pos in request.positions:
-                # 检查是否已存在完全相同的岗位
                 cursor.execute(
                     "SELECT id FROM positions WHERE title = %s AND responsibilities = %s AND requirements = %s AND bonus = %s LIMIT 1",
-                    (pos.title, pos.responsibilities, pos.requirements, pos.bonus)
+                    (pos.title, pos.responsibilities, pos.requirements, pos.bonus),
                 )
                 if cursor.fetchone():
                     skipped += 1
-                    continue   # 已存在则跳过
+                    continue
 
                 cursor.execute(
-                    "INSERT INTO positions (title, responsibilities, requirements, bonus) VALUES (%s, %s, %s, %s)",
-                    (pos.title, pos.responsibilities, pos.requirements, pos.bonus)
+                    "INSERT INTO positions (title, responsibilities, requirements, bonus, status) VALUES (%s, %s, %s, %s, 'DRAFT')",
+                    (pos.title, pos.responsibilities, pos.requirements, pos.bonus),
                 )
                 inserted += 1
 
         conn.commit()
         return {
+            "code": 201,
             "message": f"批量导入完成：新增 {inserted} 条，跳过 {skipped} 条（已存在）",
-            "count": inserted,
-            "skipped": skipped
+            "data": {"count": inserted, "skipped": skipped},
         }
     except Exception as e:
         conn.rollback()
