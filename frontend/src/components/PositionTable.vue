@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import type { Position } from '@/types/position'
 import type { UserRole } from '@/types/auth'
 import StatusTag from './StatusTag.vue'
+
+const router = useRouter()
 
 const props = defineProps<{
   positions: Position[]
@@ -38,6 +41,10 @@ const handleBatchDelete = () => {
 const formatTime = (val: string) => {
   if (!val) return ''
   return val.replace('T', ' ').slice(0, 19)
+}
+
+const viewDetail = (id: number) => {
+  router.push(`/positions/${id}`)
 }
 </script>
 
@@ -77,10 +84,13 @@ const formatTime = (val: string) => {
           {{ formatTime(row.created_at) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="280" fixed="right">
+      <el-table-column label="操作" width="320" fixed="right">
         <template #default="{ row }">
           <!-- admin 操作：全部 -->
           <template v-if="userRole === 'admin'">
+            <el-button type="primary" size="small" link @click="viewDetail(row.id)">
+              详情
+            </el-button>
             <el-button
               v-if="row.status === 'DRAFT'"
               type="primary"
@@ -130,6 +140,9 @@ const formatTime = (val: string) => {
 
           <!-- hr 操作：编辑、提交、删除（不能审批/关闭） -->
           <template v-if="userRole === 'hr'">
+            <el-button type="primary" size="small" link @click="viewDetail(row.id)">
+              详情
+            </el-button>
             <el-button
               v-if="row.status === 'DRAFT'"
               type="primary"

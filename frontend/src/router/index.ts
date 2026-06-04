@@ -10,6 +10,11 @@ const router = createRouter({
       component: () => import('@/views/PublicView.vue'),
     },
     {
+      path: '/positions/:id',
+      name: 'position-detail',
+      component: () => import('@/views/PositionDetailView.vue'),
+    },
+    {
       path: '/admin/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),
