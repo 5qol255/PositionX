@@ -1,12 +1,64 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from typing import List, Optional
+import os
+from datetime import datetime, timedelta, timezone
+
 import pymysql
 import uvicorn
 from db_config import DB_CONFIG
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from pydantic import BaseModel, Field
+from typing import List, Optional
 
 # ---------- 数据库配置 ----------
+
+
+# ---------- JWT / 密码配置 ----------
+JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-me")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRE_HOURS = 24
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def create_token(user_id: int, username: str, role: str) -> str:
+    """生成 JWT Token"""
+    expire = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS)
+    payload = {
+        "sub": str(user_id),
+        "username": username,
+        "role": role,
+        "exp": expire,
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def get_current_user(request: Request) -> dict:
+    """从 Authorization: Bearer <token> 解析当前用户，作为 FastAPI 依赖使用"""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="未登录")
+
+    token = auth_header[7:]
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return {
+            "id": int(payload["sub"]),
+            "username": payload["username"],
+            "role": payload["role"],
+        }
+    except JWTError:
+        raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
+
+
+def require_role(*roles: str):
+    """返回一个依赖函数，校验当前用户是否具有指定角色之一"""
+    def checker(current_user: dict = Depends(get_current_user)) -> dict:
+        if current_user["role"] not in roles:
+            raise HTTPException(status_code=403, detail="权限不足")
+        return current_user
+    return checker
 
 
 # ---------- 数据库连接函数 ----------
@@ -37,6 +89,17 @@ class PositionResponse(BaseModel):
 class BatchUploadRequest(BaseModel):
     positions: List[PositionCreate]
 
+
+class UserLogin(BaseModel):
+    username: str = Field(..., min_length=1, description="用户名")
+    password: str = Field(..., min_length=1, description="密码")
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    role: str
+
 # ---------- FastAPI 应用 ----------
 app = FastAPI(
     title="招聘岗位发布系统",
@@ -53,7 +116,47 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------- API 路由 ----------
+# ---------- 认证 API ----------
+
+@app.post("/webapi/auth/login", response_model=dict)
+def login(body: UserLogin):
+    """用户登录，返回 JWT Token"""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT id, username, password_hash, role FROM users WHERE username = %s",
+                (body.username,),
+            )
+            user = cursor.fetchone()
+
+        if not user or not pwd_context.verify(body.password, user["password_hash"]):
+            raise HTTPException(status_code=401, detail="用户名或密码错误")
+
+        token = create_token(user["id"], user["username"], user["role"])
+        return {
+            "code": 200,
+            "message": "登录成功",
+            "data": {
+                "token": token,
+                "user": {
+                    "id": user["id"],
+                    "username": user["username"],
+                    "role": user["role"],
+                },
+            },
+        }
+    finally:
+        conn.close()
+
+
+@app.get("/webapi/auth/me", response_model=dict)
+def get_me(current_user: dict = Depends(get_current_user)):
+    """获取当前登录用户信息"""
+    return {"code": 200, "message": "success", "data": current_user}
+
+
+# ---------- 岗位 API ----------
 
 @app.get("/webapi/positions", response_model=dict)
 def get_all_positions():
