@@ -77,7 +77,7 @@ const formatTime = (val: string) => {
           {{ formatTime(row.created_at) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="240" fixed="right">
+      <el-table-column label="操作" width="280" fixed="right">
         <template #default="{ row }">
           <!-- admin 操作 -->
           <template v-if="userRole === 'admin'">
@@ -98,6 +98,15 @@ const formatTime = (val: string) => {
               @click="emit('submit', row)"
             >
               提交审批
+            </el-button>
+            <el-button
+              v-if="row.status === 'PENDING'"
+              type="success"
+              size="small"
+              link
+              @click="emit('approve', row)"
+            >
+              审批
             </el-button>
             <el-button
               v-if="row.status === 'DRAFT' || row.status === 'CLOSED'"
