@@ -1,5 +1,12 @@
-/** 用户角色 */
+/** 用户角色类型 */
 export type UserRole = 'admin' | 'hr' | 'viewer'
+
+/** 统一 API 响应格式 */
+export interface ApiResponse<T = unknown> {
+  code: number
+  message: string
+  data: T
+}
 
 /** 用户信息 */
 export interface User {
@@ -8,7 +15,7 @@ export interface User {
   role: UserRole
 }
 
-/** 登录请求体 */
+/** 登录请求 */
 export interface LoginRequest {
   username: string
   password: string

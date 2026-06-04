@@ -31,7 +31,12 @@ const handleFileChange = async (file: File) => {
   try {
     const data = await file.arrayBuffer()
     const workbook = XLSX.read(data)
-    const sheet = workbook.Sheets[workbook.SheetNames[0]]
+    const firstSheetName = workbook.SheetNames[0]
+    if (!firstSheetName) {
+      ElMessage.error('文件中没有工作表')
+      return
+    }
+    const sheet = workbook.Sheets[firstSheetName]!
     const json = XLSX.utils.sheet_to_json<Record<string, string>>(sheet)
 
     // 验证必须列
