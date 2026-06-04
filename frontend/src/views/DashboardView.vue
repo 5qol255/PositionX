@@ -31,7 +31,7 @@ const deleteTarget = ref<Position | null>(null)
 const batchDeleteIds = ref<number[]>([])
 
 // 角色
-const userRole = ref<'admin' | 'approver' | 'viewer'>(
+const userRole = ref<'admin' | 'hr' | 'viewer'>(
   (authStore.user?.role as any) || 'viewer',
 )
 
@@ -140,6 +140,9 @@ const handleLogout = () => {
         <el-button v-if="authStore.canEdit" @click="batchVisible = true">
           📤 批量上传
         </el-button>
+        <el-tag v-if="authStore.isAdmin" type="danger" size="small" style="margin-left: 8px">
+          有审批权限
+        </el-tag>
       </div>
     </el-card>
 

@@ -1,5 +1,5 @@
 /** 用户角色 */
-export type UserRole = 'admin' | 'approver' | 'viewer'
+export type UserRole = 'admin' | 'hr' | 'viewer'
 
 /** 用户信息 */
 export interface User {

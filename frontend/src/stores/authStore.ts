@@ -9,13 +9,10 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isLoggedIn = computed(() => !!token.value)
   const isAdmin = computed(() => user.value?.role === 'admin')
-  const isApprover = computed(
-    () => user.value?.role === 'approver' || user.value?.role === 'admin',
-  )
-  const canEdit = computed(() => user.value?.role === 'admin')
-  const canApprove = computed(
-    () => user.value?.role === 'admin' || user.value?.role === 'approver',
-  )
+  const isHr = computed(() => user.value?.role === 'hr')
+  const canEdit = computed(() => user.value?.role === 'admin' || user.value?.role === 'hr')
+  const canApprove = computed(() => user.value?.role === 'admin')
+  const canClose = computed(() => user.value?.role === 'admin')
 
   /** 初始化：从 localStorage 恢复登录态 */
   const init = () => {
@@ -47,9 +44,10 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     isLoggedIn,
     isAdmin,
-    isApprover,
+    isHr,
     canEdit,
     canApprove,
+    canClose,
     init,
     login,
     logout,

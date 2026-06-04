@@ -242,9 +242,9 @@ def get_position(position_id: int):
 @app.post("/webapi/positions", status_code=201, response_model=dict)
 def create_position(
     position: PositionCreate,
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(require_role("admin", "hr")),
 ):
-    """新增岗位（仅 admin）"""
+    """新增岗位（admin/hr）"""
     conn = get_connection()
     try:
         status = position.status or "DRAFT"
@@ -275,9 +275,9 @@ def create_position(
 def update_position(
     position_id: int,
     position: PositionUpdate,
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(require_role("admin", "hr")),
 ):
-    """更新岗位信息（仅 admin，且仅 DRAFT 状态可编辑）"""
+    """更新岗位信息（admin/hr，且仅 DRAFT 状态可编辑）"""
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
@@ -338,9 +338,9 @@ def update_position(
 @app.delete("/webapi/positions/{position_id}", response_model=dict)
 def delete_position(
     position_id: int,
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(require_role("admin", "hr")),
 ):
-    """删除岗位（仅 admin，且仅 DRAFT/CLOSED 状态可删除）"""
+    """删除岗位（admin/hr，且仅 DRAFT/CLOSED 状态可删除）"""
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
@@ -371,12 +371,14 @@ def delete_position(
 def update_position_status(
     position_id: int,
     body: StatusUpdateRequest,
-    current_user: dict = Depends(require_role("admin", "approver")),
+    current_user: dict = Depends(require_role("admin", "hr")),
 ):
-    """变更岗位状态（admin/approver 可操作）"""
+    """变更岗位状态（admin 可审批/关闭，hr 只能提交）"""
     action = body.action
-    if action not in STATUS_TRANSITIONS.values() and action not in ("submit", "approve", "reject", "close"):
-        raise HTTPException(status_code=400, detail=f"无效操作: {action}")
+
+    # hr 角色只能执行 submit 操作
+    if current_user["role"] == "hr" and action != "submit":
+        raise HTTPException(status_code=403, detail="权限不足：仅管理员可审批")
 
     conn = get_connection()
     try:
@@ -450,9 +452,9 @@ def get_statistics():
 @app.post("/webapi/positions/batch", status_code=201, response_model=dict)
 def batch_upload(
     request: BatchUploadRequest,
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(require_role("admin", "hr")),
 ):
-    """批量上传岗位（仅 admin，默认 DRAFT 状态）"""
+    """批量上传岗位（admin/hr，默认 DRAFT 状态）"""
     if not request.positions:
         raise HTTPException(status_code=400, detail="导入数据不能为空")
 

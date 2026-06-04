@@ -79,7 +79,7 @@ const formatTime = (val: string) => {
       </el-table-column>
       <el-table-column label="操作" width="280" fixed="right">
         <template #default="{ row }">
-          <!-- admin 操作 -->
+          <!-- admin 操作：全部 -->
           <template v-if="userRole === 'admin'">
             <el-button
               v-if="row.status === 'DRAFT'"
@@ -128,16 +128,34 @@ const formatTime = (val: string) => {
             </el-button>
           </template>
 
-          <!-- approver 操作 -->
-          <template v-if="userRole === 'approver'">
+          <!-- hr 操作：编辑、提交、删除（不能审批/关闭） -->
+          <template v-if="userRole === 'hr'">
             <el-button
-              v-if="row.status === 'PENDING'"
-              type="success"
+              v-if="row.status === 'DRAFT'"
+              type="primary"
               size="small"
               link
-              @click="emit('approve', row)"
+              @click="emit('edit', row)"
             >
-              审批
+              编辑
+            </el-button>
+            <el-button
+              v-if="row.status === 'DRAFT'"
+              type="warning"
+              size="small"
+              link
+              @click="emit('submit', row)"
+            >
+              提交审批
+            </el-button>
+            <el-button
+              v-if="row.status === 'DRAFT' || row.status === 'CLOSED'"
+              type="danger"
+              size="small"
+              link
+              @click="emit('delete', row)"
+            >
+              删除
             </el-button>
           </template>
         </template>
