@@ -113,3 +113,112 @@ project/
 | 关闭岗位 | ✅ | ❌ |
 | 删除岗位 | ✅ | ✅ |
 | 批量导入 | ✅ | ✅ |
+
+## 测试指南
+
+### 1. 公开页面测试
+
+访问 <http://localhost>（Docker）或 <http://localhost:5173>（本地开发）
+
+- 搜索框输入关键词，点击搜索
+- 状态筛选下拉框切换不同状态
+- 点击「查看详情」查看岗位完整信息
+- 点击「← 返回」回到列表
+
+### 2. 登录测试
+
+访问 <http://localhost/admin/login>
+
+- 输入错误密码 → 提示「用户名或密码错误」
+- 用 admin/admin123 登录 → 跳转管理后台
+- 用 hr/hr123 登录 → 跳转管理后台
+
+### 3. 岗位管理测试（admin 角色）
+
+登录后在管理后台：
+
+**创建岗位：**
+
+- 点击「新增岗位」，填写表单，提交
+- 新岗位状态为「草稿」
+
+**编辑岗位：**
+
+- 草稿状态的岗位，点击「编辑」修改内容
+- 非草稿状态的岗位，没有编辑按钮
+
+**提交审批：**
+
+- 草稿状态的岗位，点击「提交审批」
+- 状态变为「待审批」
+
+**审批岗位：**
+
+- 待审批状态的岗位，点击「审批」
+- 弹窗选择「通过」或「驳回」
+- 通过 → 状态变为「已发布」
+- 驳回 → 状态变回「草稿」
+
+**关闭岗位：**
+
+- 已发布的岗位，点击「关闭」
+- 状态变为「已关闭」
+
+**删除岗位：**
+
+- 草稿或已关闭的岗位，点击「删除」
+- 其他状态的岗位，没有删除按钮
+
+### 4. 权限测试（hr 角色）
+
+用 hr/hr123 登录：
+
+- 能看到「编辑」「提交审批」「删除」按钮（草稿状态）
+- 看不到「审批」按钮（待审批状态）
+- 看不到「关闭」按钮（已发布状态）
+- 尝试直接调用审批接口 → 返回 403 权限不足
+
+### 5. 批量导入测试
+
+- 点击「批量导入」按钮
+- 上传 Excel 文件（需包含 title, responsibilities, requirements 列）
+- 预览数据，确认后导入
+- 重复数据自动跳过
+
+### 6. API 接口测试
+
+使用 curl 或 Postman 测试：
+
+```bash
+# 获取岗位列表
+curl http://localhost/webapi/positions
+
+# 登录获取 Token
+curl -X POST http://localhost/webapi/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
+
+# 用 Token 访问需要认证的接口
+curl http://localhost/webapi/auth/me \
+  -H "Authorization: Bearer <你的token>"
+
+# 创建岗位
+curl -X POST http://localhost/webapi/positions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <你的token>" \
+  -d '{"title":"测试岗位","responsibilities":"职责","requirements":"要求"}'
+
+# 变更状态
+curl -X PATCH http://localhost/webapi/positions/1/status \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <你的token>" \
+  -d '{"action":"submit"}'
+```
+
+### 7. 异常场景测试
+
+- 未登录访问管理后台 → 跳转登录页
+- Token 过期后操作 → 提示重新登录
+- 非草稿状态编辑岗位 → 返回 400
+- hr 角色调用审批接口 → 返回 403
+- 删除不存在的岗位 → 返回 404
