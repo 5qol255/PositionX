@@ -34,7 +34,7 @@ onMounted(fetchPublished)
     <el-card>
       <template #header>
         <div style="display: flex; align-items: center; justify-content: space-between">
-          <h2 style="margin: 0">📋 招聘岗位 — 热招岗位</h2>
+          <h2 style="margin: 0">📋 PositionX — 热招岗位</h2>
           <div style="display: flex; gap: 8px">
             <el-input
               v-model="keyword"

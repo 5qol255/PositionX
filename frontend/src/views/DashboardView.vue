@@ -99,7 +99,7 @@ const handleLogout = () => {
     <!-- 顶部栏 -->
     <el-card style="margin-bottom: 20px" body-style="padding: 12px 20px">
       <div style="display: flex; align-items: center; justify-content: space-between">
-        <h2 style="margin: 0">📋 招聘岗位管理后台</h2>
+        <h2 style="margin: 0">📋 PositionX 管理后台</h2>
         <div style="display: flex; align-items: center; gap: 16px">
           <span style="color: #606266">
             欢迎，<strong>{{ authStore.user?.username }}</strong>

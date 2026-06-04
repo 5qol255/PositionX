@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.routers import auth, positions, statistics
 
 app = FastAPI(
-    title="招聘岗位发布系统",
+    title="PositionX — 招聘岗位管理系统",
     description="提供岗位信息的增删改查及批量上传接口",
     version="1.0.0",
 )
