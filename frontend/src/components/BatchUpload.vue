@@ -77,11 +77,11 @@ const handleImport = async () => {
 </script>
 
 <template>
-  <el-dialog :model-value="visible" title="Excel 批量上传" width="700px" @close="handleClose">
+  <el-dialog :model-value="visible" title="批量上传" width="700px" @close="handleClose">
     <el-upload
       :auto-upload="false"
       :limit="1"
-      accept=".xlsx,.xls"
+      accept=".xlsx,.xls,.csv"
       :on-change="(f: any) => handleFileChange(f.raw)"
       drag
     >
