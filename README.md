@@ -6,7 +6,7 @@
 
 | 层级 | 技术 |
 |------|------|
-| 后端 | FastAPI (Python 3.12) + PyMySQL |
+| 后端 | FastAPI (Python 3.12) + PyMySQL + DBUtils 连接池 |
 | 前端 | Vue 3 + TypeScript + Element Plus + Pinia |
 | 数据库 | MySQL 8.0 |
 | 认证 | JWT (python-jose + bcrypt) |
@@ -17,7 +17,7 @@
 - 岗位 CRUD（创建、编辑、删除）
 - 岗位状态流转：草稿 → 待审批 → 已发布 → 已关闭
 - 角色权限控制（管理员 / 招聘管理）
-- Excel 批量导入
+- Excel/CSV 批量导入
 - 关键词搜索 + 状态筛选
 - 统计面板（按状态分组）
 - 公开页面（仅展示已发布岗位）
@@ -27,10 +27,10 @@
 ### Docker Compose（推荐）
 
 ```bash
-docker compose up --build
+docker compose up -d
 ```
 
-访问 <http://localhost>
+前端访问地址：<http://localhost:9999>
 
 ### 本地开发
 
@@ -46,15 +46,8 @@ npm run dev
 ```
 
 前端开发服务器：<http://localhost:5173>
+
 后端 API：<http://localhost:8080>
-
-## Docker 部署
-
-```bash
-docker compose up -d
-```
-
-前端访问地址：<http://localhost:9999>
 
 ## 默认账号
 
