@@ -1,6 +1,7 @@
 import os
 
 import pymysql
+from dbutils.pooled_db import PooledDB
 
 DB_CONFIG = {
     "host": os.getenv("DB_HOST", "localhost"),
@@ -12,7 +13,9 @@ DB_CONFIG = {
     "cursorclass": pymysql.cursors.DictCursor,
 }
 
+_pool = PooledDB(creator=pymysql, maxconnections=int(os.getenv("DB_MAX_CONNECTIONS", 10)), **DB_CONFIG)
+
 
 def get_connection():
-    """获取数据库连接"""
-    return pymysql.connect(**DB_CONFIG)
+    """从连接池获取数据库连接"""
+    return _pool.connection()

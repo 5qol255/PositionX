@@ -30,6 +30,7 @@ services:
       DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
       DB_NAME: recruitment
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      DB_MAX_CONNECTIONS: ${DB_MAX_CONNECTIONS:-10}
 
   frontend:
     build:
