@@ -7,4 +7,3 @@ db_config.py
 frontend/node_modules/
 frontend/dist/
 .env
-migrate_step1.py

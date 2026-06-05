@@ -37,7 +37,7 @@ docker compose up --build
 ```bash
 # 后端
 pip install -r requirements.txt
-python app.py
+uvicorn backend.main:app --reload --port 8080
 
 # 前端
 cd frontend
@@ -59,8 +59,7 @@ npm run dev
 
 ```
 project/
-├── app.py                    # 入口文件
-├── backend/
+├── backend/                  # FastAPI 后端
 │   ├── main.py               # FastAPI 应用初始化
 │   ├── auth.py               # JWT 认证
 │   ├── models.py             # Pydantic 数据模型
@@ -69,7 +68,7 @@ project/
 │       ├── auth.py           # 登录接口
 │       ├── positions.py      # 岗位 CRUD + 状态变更
 │       └── statistics.py     # 统计接口
-├── frontend/
+├── frontend/                 # Vue 前端
 │   └── src/
 │       ├── views/            # 页面组件
 │       ├── components/       # 通用组件
@@ -78,10 +77,13 @@ project/
 │       ├── types/            # TypeScript 类型
 │       ├── router/           # 路由配置
 │       └── utils/            # 工具函数
+├── tests/                    # pytest 测试
+├── docker/                   # Docker 配置
+│   ├── backend.Dockerfile
+│   ├── frontend.Dockerfile
+│   └── default.conf          # Nginx 配置
+├── data/                     # 样例数据
 ├── docker-compose.yml
-├── backend.Dockerfile
-├── frontend.Dockerfile
-├── nginx/default.conf
 ├── db_init.sql
 ├── requirements.txt
 └── .env                      # 环境变量（已 gitignore）
