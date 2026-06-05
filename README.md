@@ -30,7 +30,7 @@
 docker compose up --build
 ```
 
-访问 http://localhost
+访问 <http://localhost>
 
 ### 本地开发
 
@@ -45,8 +45,16 @@ npm install
 npm run dev
 ```
 
-前端开发服务器：http://localhost:5173
-后端 API：http://localhost:8080
+前端开发服务器：<http://localhost:5173>
+后端 API：<http://localhost:8080>
+
+## Docker 部署
+
+```bash
+docker compose up -d
+```
+
+前端访问地址：<http://localhost:9999>
 
 ## 默认账号
 
