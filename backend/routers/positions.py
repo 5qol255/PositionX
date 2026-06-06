@@ -41,15 +41,21 @@ def get_all_positions(
     status: Optional[str] = None,
     current_user: Optional[dict] = Depends(get_optional_user),
 ):
-    """获取岗位列表（支持搜索/过滤），默认只返回已发布岗位"""
+    """获取岗位列表（支持搜索/过滤），未登录只返回已发布岗位"""
     # 非 PUBLISHED 状态需要登录
     if status and status != "PUBLISHED" and not current_user:
         raise HTTPException(status_code=401, detail="未登录")
 
     conn = get_connection()
     try:
-        conditions = ["status = %s"]
-        params = [status or "PUBLISHED"]
+        conditions = []
+        params = []
+        if status:
+            conditions.append("status = %s")
+            params.append(status)
+        elif not current_user:
+            conditions.append("status = %s")
+            params.append("PUBLISHED")
         if keyword:
             conditions.append("title LIKE %s")
             params.append(f"%{keyword}%")
