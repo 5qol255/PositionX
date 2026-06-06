@@ -8,7 +8,6 @@ class PositionCreate(BaseModel):
     responsibilities: str = Field(..., min_length=1, description="岗位职责")
     requirements: str = Field(..., min_length=1, description="岗位要求")
     bonus: str = Field(default="", description="加分项")
-    status: Optional[str] = Field(None, description="岗位状态（默认 DRAFT）")
 
 
 class PositionUpdate(BaseModel):
@@ -20,7 +19,6 @@ class PositionUpdate(BaseModel):
 
 class StatusUpdateRequest(BaseModel):
     action: str = Field(..., description="操作：submit/approve/reject/close")
-    comment: str = Field(default="", description="审批意见（可选）")
 
 
 class BatchUploadRequest(BaseModel):

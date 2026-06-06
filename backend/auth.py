@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from fastapi import Depends, HTTPException, Request
 from jose import JWTError, jwt
@@ -40,6 +41,24 @@ def get_current_user(request: Request) -> dict:
         }
     except JWTError:
         raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
+
+
+def get_optional_user(request: Request) -> Optional[dict]:
+    """可选鉴权：有 Token 解析用户，无 Token 返回 None"""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+
+    token = auth_header[7:]
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return {
+            "id": int(payload["sub"]),
+            "username": payload["username"],
+            "role": payload["role"],
+        }
+    except JWTError:
+        return None
 
 
 def require_role(*roles: str):

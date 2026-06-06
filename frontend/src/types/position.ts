@@ -19,7 +19,6 @@ export interface PositionCreate {
   responsibilities: string
   requirements: string
   bonus?: string
-  status?: PositionStatus
 }
 
 /** 更新岗位请求体 */
@@ -33,7 +32,6 @@ export interface PositionUpdate {
 /** 状态变更请求体 */
 export interface StatusUpdateRequest {
   action: 'submit' | 'approve' | 'reject' | 'close'
-  comment?: string
 }
 
 /** 统一 API 响应 */

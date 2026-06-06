@@ -27,9 +27,20 @@ class TestGetPositions:
         assert r.status_code == 200
 
     def test_get_all_with_status_filter(self, client, mock_conn):
-        """状态筛选"""
+        """状态筛选（需登录）"""
         mock_conn.cursor_instance.set_results([SAMPLE_POSITION])
+        r = client.get("/webapi/positions", params={"status": "DRAFT"}, headers=auth_header("admin"))
+        assert r.status_code == 200
+
+    def test_get_draft_requires_auth(self, client):
+        """未登录不能查看草稿岗位"""
         r = client.get("/webapi/positions", params={"status": "DRAFT"})
+        assert r.status_code == 401
+
+    def test_get_published_public(self, client, mock_conn):
+        """未登录可查看已发布岗位"""
+        mock_conn.cursor_instance.set_results([SAMPLE_POSITION])
+        r = client.get("/webapi/positions", params={"status": "PUBLISHED"})
         assert r.status_code == 200
 
 
@@ -94,6 +105,19 @@ class TestCreatePosition:
             headers=auth_header("admin"),
         )
         assert r.status_code == 422
+
+    def test_create_status_always_draft(self, client, mock_conn):
+        """创建岗位时 status 字段被忽略，始终为 DRAFT"""
+        mock_conn.cursor_instance.set_lastrowid(1)
+        mock_conn.cursor_instance.set_results(SAMPLE_POSITION)
+
+        r = client.post(
+            "/webapi/positions",
+            json={"title": "测试", "responsibilities": "职责", "requirements": "要求", "status": "PUBLISHED"},
+            headers=auth_header("admin"),
+        )
+        assert r.status_code == 201
+        assert r.json()["data"]["status"] == "DRAFT"
 
 
 class TestUpdatePosition:

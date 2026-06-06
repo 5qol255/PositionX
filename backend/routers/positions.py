@@ -2,7 +2,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from backend.auth import require_role
+from backend.auth import get_optional_user, require_role
 from backend.db import get_connection
 from backend.models import BatchUploadRequest, PositionCreate, PositionUpdate, StatusUpdateRequest
 
@@ -39,18 +39,20 @@ def _format_row(row: dict) -> dict:
 def get_all_positions(
     keyword: Optional[str] = None,
     status: Optional[str] = None,
+    current_user: Optional[dict] = Depends(get_optional_user),
 ):
-    """获取岗位列表（支持搜索/过滤）"""
+    """获取岗位列表（支持搜索/过滤），默认只返回已发布岗位"""
+    # 非 PUBLISHED 状态需要登录
+    if status and status != "PUBLISHED" and not current_user:
+        raise HTTPException(status_code=401, detail="未登录")
+
     conn = get_connection()
     try:
-        conditions = []
-        params = []
+        conditions = ["status = %s"]
+        params = [status or "PUBLISHED"]
         if keyword:
             conditions.append("title LIKE %s")
             params.append(f"%{keyword}%")
-        if status:
-            conditions.append("status = %s")
-            params.append(status)
 
         where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
 
@@ -94,10 +96,9 @@ def create_position(
     """新增岗位（admin/hr）"""
     conn = get_connection()
     try:
-        status = position.status or "DRAFT"
         with conn.cursor() as cursor:
-            sql = "INSERT INTO positions (title, responsibilities, requirements, bonus, status) VALUES (%s, %s, %s, %s, %s)"
-            cursor.execute(sql, (position.title, position.responsibilities, position.requirements, position.bonus, status))
+            sql = "INSERT INTO positions (title, responsibilities, requirements, bonus, status) VALUES (%s, %s, %s, %s, 'DRAFT')"
+            cursor.execute(sql, (position.title, position.responsibilities, position.requirements, position.bonus))
             conn.commit()
             new_id = cursor.lastrowid
 

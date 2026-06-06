@@ -15,19 +15,17 @@ const emit = defineEmits<{
 }>()
 
 const store = usePositionStore()
-const comment = ref('')
 const submitting = ref(false)
 
 const handleClose = () => {
   emit('update:visible', false)
-  comment.value = ''
 }
 
 const handleAction = async (action: 'approve' | 'reject') => {
   if (!props.position) return
   submitting.value = true
   try {
-    await store.changeStatus(props.position.id, { action, comment: comment.value })
+    await store.changeStatus(props.position.id, { action })
     ElMessage.success(action === 'approve' ? '审批通过' : '已驳回')
     emit('update:visible', false)
     emit('done')
@@ -52,12 +50,6 @@ const handleAction = async (action: 'approve' | 'reject') => {
       <p><strong>任职要求：</strong>{{ position.requirements }}</p>
       <p v-if="position.bonus"><strong>加分项：</strong>{{ position.bonus }}</p>
     </div>
-    <el-input
-      v-model="comment"
-      type="textarea"
-      :rows="3"
-      placeholder="审批意见（可选）"
-    />
     <template #footer>
       <el-button @click="handleClose">取消</el-button>
       <el-button type="danger" :loading="submitting" @click="handleAction('reject')">
